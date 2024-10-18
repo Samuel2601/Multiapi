@@ -1,25 +1,22 @@
 import {Injectable} from '@nestjs/common';
-import {InjectModel} from '@nestjs/mongoose';
-import {Model} from 'mongoose';
-import {User} from 'src/userModule/models/user.schema';
+import {InjectRepository} from '@nestjs/typeorm';
+import {Repository} from 'typeorm';
 import {CreateUserDto, UpdateUserDto} from './user.dto';
 import * as bcrypt from 'bcrypt';
 import {apiResponse} from 'src/common/helpers/apiResponse';
 import {RoleService} from '../role/role.service';
 import {EmailService} from 'src/common/email/email.service';
-import {RoleUser} from '../models/roleuser.schema';
+import {User} from 'src/entity/User';
+import {Role} from 'src/entity/Role';
+
 /**
- * Esta clase maneja las operaciones CRUD para los usuarios.
+ * Esta clase maneja las operaciones CRUD para los usuarios en PostgreSQL.
  */
 @Injectable()
 export class UserService {
-	/**
-	 * Constructor del servicio de usuarios.
-	 * @param userModel Modelo inyectado de Mongoose para los usuarios.
-	 */
 	constructor(
-		@InjectModel(User.name) private readonly userModel: Model<User>,
-		@InjectModel(RoleUser.name) private readonly rolModel: Model<RoleUser>,
+		@InjectRepository(User) private readonly userRepository: Repository<User>,
+		@InjectRepository(Role) private readonly roleRepository: Repository<Role>,
 		private readonly roleService: RoleService,
 		private readonly emailService: EmailService,
 	) {}
@@ -28,13 +25,13 @@ export class UserService {
 	 * Devuelve una lista de todos los usuarios en la base de datos.
 	 * @returns Promesa que resuelve con una lista de usuarios.
 	 */
-	async findAllfilter(params, populateFields = []): Promise<any> {
+	async findAllfilter(params: any, relations: string[] = []): Promise<any> {
 		try {
-			let query = this.userModel.find(params).sort({createdAt: -1});
-			populateFields.forEach((field) => {
-				query = query.populate(field);
+			const data = await this.userRepository.find({
+				where: params,
+				order: {created_at: 'DESC'},
+				relations,
 			});
-			const data = await query.exec();
 			return apiResponse(200, 'Usuarios obtenidos con éxito.', data, null);
 		} catch (error) {
 			console.error(error);
@@ -49,9 +46,11 @@ export class UserService {
 	 */
 	async findById(id: string): Promise<any> {
 		try {
-			const user = await this.userModel.findById(id).populate(this.rolModel.name).exec();
+			const user = await this.userRepository.findOne({
+				where: {id},
+				relations: ['role'], // Relacionar con roles
+			});
 			if (!user) {
-				//throw new NotFoundException(`Usuario con ID ${id} no encontrado`);
 				return apiResponse(404, 'Usuario no encontrado', null, null);
 			}
 			return apiResponse(200, 'Usuario obtenido con éxito.', user, null);
@@ -72,29 +71,36 @@ export class UserService {
 			if (data.password) {
 				data.password = await bcrypt.hash(data.password, 10); // Hash de la contraseña
 			}
-			// Si no se proporciona un rol, intenta obtener el rol por defecto
+
 			if (!data.role) {
 				const defaultRole = await this.roleService.getDefaultRole();
 				if (defaultRole) {
-					data.role = defaultRole._id.toString(); // Asigna el ID del rol por defecto al usuario
+					data.role = {id: defaultRole.id} as Role; // Asigna el ID del rol por defecto al usuario
 				} else {
 					return apiResponse(400, 'No se encontró un rol por defecto.', null, null);
 				}
 			}
-			const newUser = new this.userModel(data);
-			const user = await newUser.save();
-			this.emailService.sendNotification(user.email, 'Nuevo usuario registrado', 'src/emailTemplates/welcome.html', {
-				name: user.name,
-				last_name: user.last_name,
-				email: user.email,
-			});
+
+			const newUser = this.userRepository.create(data);
+			const user = await this.userRepository.save(newUser);
+
+			if (user) {
+				// Asegúrate de que el usuario fue creado antes de enviar el correo
+				this.emailService
+					.sendNotification(user.email, 'Nuevo usuario registrado', 'src/emailTemplates/welcome.html', {
+						name: user.name,
+						last_name: user.last_name,
+						email: user.email,
+					})
+					.catch((error) => {
+						console.error(`Error enviando correo a ${user.email}:`, error);
+					});
+			}
+
 			return apiResponse(201, 'Usuario creado con éxito.', user, null);
 		} catch (error) {
 			console.error(error);
-
-			// Devuelve un mensaje específico según el error
-			const errorMessage = error.code === 11000 ? 'El usuario ya existe.' : 'Error al crear el usuario.';
-
+			const errorMessage = error.code === '23505' ? 'El usuario ya existe.' : 'Error al crear el usuario.';
 			return apiResponse(500, errorMessage, null, error);
 		}
 	}
@@ -107,28 +113,30 @@ export class UserService {
 	 */
 	async updateUser(id: string, updateUserDto: UpdateUserDto): Promise<any> {
 		try {
-			const user = await this.userModel.findById(id).populate(this.rolModel.name);
+			const user = await this.userRepository.findOne({where: {id}, relations: ['role']});
+
 			if (!user) {
-				//throw new NotFoundException(`Usuario con ID ${id} no encontrado`);
 				return apiResponse(404, 'Usuario no encontrado', null, null);
 			}
-			const updateuser = await this.userModel.findByIdAndUpdate(id, updateUserDto, {new: true}).populate(this.rolModel.name);
-			if (user.role == updateuser.role) {
+
+			await this.userRepository.update(id, updateUserDto);
+			const updatedUser = await this.userRepository.findOne({where: {id}, relations: ['role']});
+
+			if (user.role.id === updatedUser.role.id) {
 				this.emailService.sendNotification(user.email, 'Actualización de Información', 'src/emailTemplates/updateAccount.html', {
-					userName: updateuser.name,
+					userName: updatedUser.name,
 					updatedFields: updateUserDto,
 				});
 			} else {
-				const role = await this.rolModel.findById(updateuser.role);
-
+				const role = await this.roleRepository.findOne({where: {id: updatedUser.role.id}});
 				this.emailService.sendNotification(user.email, 'Cambio de Rol', 'src/emailTemplates/role_change_notification.html', {
-					userName: updateuser.name,
+					userName: updatedUser.name,
 					newRole: role.name,
-					permissions: role.permisos,
+					permissions: role.permissions,
 				});
 			}
 
-			return apiResponse(200, 'Usuario actualizado con éxito.', user, null);
+			return apiResponse(200, 'Usuario actualizado con éxito.', updatedUser, null);
 		} catch (error) {
 			console.error(error);
 			return apiResponse(500, 'ERROR', null, error);
@@ -142,21 +150,24 @@ export class UserService {
 	 */
 	async deleteUser(id: string): Promise<any> {
 		try {
-			const deletedUser = await this.userModel.findByIdAndDelete(id);
+			const deletedUser = await this.userRepository.findOne({where: {id}});
 			if (!deletedUser) {
-				//throw new NotFoundException(`User with ID ${id} not found`);
 				return apiResponse(404, 'Usuario no encontrado', null, null);
 			}
-			this.emailService.sendNotification(deletedUser.email, 'Eliminación de Cuenta', 'src/emailTemplates/deleteAccount.html.html', {
+
+			await this.userRepository.delete(id);
+
+			this.emailService.sendNotification(deletedUser.email, 'Eliminación de Cuenta', 'src/emailTemplates/deleteAccount.html', {
 				name: deletedUser.name,
 				last_name: deletedUser.last_name,
-				deleteDate: deletedUser.createdAt,
-				accountId: deletedUser._id,
+				deleteDate: deletedUser.created_at,
+				accountId: deletedUser.id,
 				supportUrl: 'https://esmeraldas.gob.ec/contacto',
 				currentYear: new Date().getFullYear(),
 				serviceName: 'Esmeraldas la Bella',
 				email: deletedUser.email,
 			});
+
 			return apiResponse(200, 'Usuario eliminado con éxito.', deletedUser, null);
 		} catch (error) {
 			console.error(error);
@@ -170,23 +181,22 @@ export class UserService {
 
 		for (const userDto of createUsersDto) {
 			try {
-				const createdUser = await this.userModel.create(userDto);
+				const createdUser = this.userRepository.create(userDto);
+				await this.userRepository.save(createdUser);
 				createdUsers.push(createdUser);
+
 				this.emailService.sendNotification(createdUser.email, 'Nuevo usuario registrado', 'src/emailTemplates/welcome.html', {
 					name: createdUser.name,
 					last_name: createdUser.last_name,
 					email: createdUser.email,
 				});
 			} catch (error) {
-				// Aquí puedes filtrar o registrar el error según necesites
-				if (error.code === 11000) {
-					// 11000 es el código de error para duplicados
+				if (error.code === '23505') {
 					errors.push({
 						user: userDto,
 						message: 'Usuario ya existente',
 					});
 				} else {
-					// Manejar otros tipos de errores si es necesario
 					errors.push({
 						user: userDto,
 						message: error.message,
@@ -204,30 +214,33 @@ export class UserService {
 	}
 
 	async updateBatch(updateUsersDto: UpdateUserDto[]): Promise<any> {
-		const updatedUsers: User[] = [];
+		const updatedUsers = [];
 		const errors = [];
 
 		for (const dtoUser of updateUsersDto) {
 			try {
-				const user = await this.userModel.findByIdAndUpdate(dtoUser._id, dtoUser, {new: true});
+				const user = await this.userRepository.findOne({where: {id: dtoUser.id}});
 				if (!user) {
 					errors.push({
-						id: dtoUser._id,
-						message: `Usuario con ID ${dtoUser._id} no encontrado`,
+						id: dtoUser.id,
+						message: `Usuario con ID ${dtoUser.id} no encontrado`,
 					});
-					continue; // Si no se encuentra el usuario, continuar con el siguiente
+					continue;
 				}
-				updatedUsers.push(user);
+
+				await this.userRepository.update(dtoUser.id, dtoUser);
+				const updatedUser = await this.userRepository.findOne({where: {id: dtoUser.id}});
+				updatedUsers.push(updatedUser);
 			} catch (error) {
 				errors.push({
-					id: dtoUser._id,
+					id: dtoUser.id,
 					message: error.message,
 				});
 			}
 		}
 
 		return apiResponse(
-			errors.length > 0 ? 207 : 200, // 207 para "Multi-Status" si hay errores, 200 si todo fue exitoso
+			errors.length > 0 ? 207 : 200,
 			errors.length > 0 ? 'Algunos usuarios no pudieron ser actualizados.' : 'Actualización de usuarios exitosa.',
 			updatedUsers,
 			errors,

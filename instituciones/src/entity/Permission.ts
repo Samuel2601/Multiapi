@@ -1,6 +1,7 @@
-import {Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn} from 'typeorm';
+import {Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToMany} from 'typeorm';
+import {Role} from './Role';
 
-@Entity()
+@Entity('permissions')
 export class Permission {
 	@PrimaryGeneratedColumn('uuid')
 	id: string;
@@ -17,9 +18,20 @@ export class Permission {
 	@Column({default: false})
 	is_default: boolean;
 
-	@CreateDateColumn()
+	@CreateDateColumn({
+		name: 'created_at',
+		type: 'timestamp',
+		default: () => 'CURRENT_TIMESTAMP',
+	})
 	created_at: Date;
 
-	@UpdateDateColumn()
+	@UpdateDateColumn({
+		name: 'updated_at',
+		type: 'timestamp',
+		default: () => 'CURRENT_TIMESTAMP',
+	})
 	updated_at: Date;
+
+	@ManyToMany(() => Role, (role) => role.permissions)
+	roles: Role[];
 }

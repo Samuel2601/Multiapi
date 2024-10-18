@@ -34,13 +34,10 @@ export class RoleService implements OnModuleInit {
 
 		// Verificar si no hay roles y crearlos si es necesario
 		if (existingRoles.length === 0) {
-			// Crear un array de IDs de permisos
-			const permisos = existingPermissions.map((element) => element.id); // Usar 'id' para PostgreSQL
-
 			// Crear y guardar el rol de administrador
 			const adminRole = this.roleRepository.create({
 				name: 'admin',
-				permisos, // Añadir los permisos aquí
+				permisos: existingPermissions, // Aquí asignamos directamente los permisos
 				is_default: true,
 				access_scope: 'all',
 			});
@@ -56,13 +53,21 @@ export class RoleService implements OnModuleInit {
 	 * Devuelve una lista de todos los usuarios en la base de datos.
 	 * @returns Promesa que resuelve con una lista de usuarios.
 	 */
-	async findAllfilter(params, populateFields = []): Promise<any> {
+	async findAllfilter(params: any, populateFields: string[] = []): Promise<any> {
 		try {
-			let query = this.roleModel.find(params).sort({createdAt: -1});
+			const query = this.roleRepository.createQueryBuilder('role');
+
+			// Agregar filtros
+			if (params) {
+				query.where(params);
+			}
+
+			// Agregar poblaciones de relaciones
 			populateFields.forEach((field) => {
-				query = query.populate(field);
+				query.leftJoinAndSelect(`role.${field}`, field);
 			});
-			const data = await query.exec();
+
+			const data = await query.getMany();
 			return apiResponse(200, 'Roles obtenidos con éxito.', data, null);
 		} catch (error) {
 			console.error(error);
@@ -72,10 +77,15 @@ export class RoleService implements OnModuleInit {
 
 	async findById(id: string): Promise<any> {
 		try {
-			const role = await this.roleModel.findById(id).populate(this.permissModel.name);
+			const role = await this.roleRepository.findOne({
+				where: {id},
+				relations: ['permisos'], // Relacionar permisos
+			});
+
 			if (!role) {
 				return apiResponse(404, 'Rol no encontrado.', null, null);
 			}
+
 			return apiResponse(200, null, role, null);
 		} catch (error) {
 			console.error(error);
@@ -87,69 +97,60 @@ export class RoleService implements OnModuleInit {
 		const {name, permisos} = createRoleDto;
 
 		// Verifica si ya existe un rol con el mismo nombre
-		const existingRole = await this.roleModel.findOne({name});
+		const existingRole = await this.roleRepository.findOne({where: {name}});
 		if (existingRole) {
 			return apiResponse(400, 'Ya existe un rol con ese nombre', null, null);
 		}
 
-		let assignedPermissions: Types.ObjectId[];
+		const assignedPermissions = permisos.length > 0 ? permisos : await this.permissRepository.find({where: {is_default: true}});
 
-		if (permisos && permisos.length > 0) {
-			// Si se proporcionan permisos, se asignan esos permisos
-			assignedPermissions = permisos;
-		} else {
-			// Si no se proporcionan permisos, busca los permisos predeterminados (is_default: true)
-			const defaultPermissions: Permission[] = await this.permissModel.find({is_default: true});
-
-			/*if (!defaultPermissions || defaultPermissions.length === 0) {
-				return apiResponse(400, 'No se encontraron permisos predeterminados', null, null);
-			}*/
-
-			// Extrae los IDs de los permisos predeterminados
-			assignedPermissions = defaultPermissions.map((defaultPermission: Permission) => defaultPermission._id as Types.ObjectId);
-		}
-
-		// Crea el nuevo rol con los permisos asignados
-		const newRole = new this.roleModel({
+		// Crear nuevo rol con los permisos asignados
+		const newRole = this.roleRepository.create({
 			name,
 			permisos: assignedPermissions,
 		});
 
-		return newRole.save();
+		await this.roleRepository.save(newRole);
+		return apiResponse(201, 'Rol creado con éxito.', newRole, null);
 	}
 
 	async updateRole(id: string, data: UpdateRoleUserDto): Promise<any> {
 		try {
-			const rolActual = await this.roleModel.findById(id).populate(this.permissModel.name);
-			if (!rolActual) {
-				return apiResponse(404, 'Rol no encontrado.', null, null);
-			}
-
-			const permisosActuales = rolActual.permisos.map((permiso) => permiso._id.toString());
-
-			const rolActualizado = await this.roleModel.findByIdAndUpdate(id, data, {new: true}).populate(this.permissModel.name);
-
-			if (!rolActualizado) {
-				return apiResponse(404, 'Rol no encontrado.', null, null);
-			}
-
-			const permisosActualizados = rolActualizado.permisos.map((permiso) => permiso._id.toString());
-
-			const permisosRemovidos = permisosActuales.filter((permisoId) => !permisosActualizados.includes(permisoId));
-			const permisosAgregados = permisosActualizados.filter((permisoId) => !permisosActuales.includes(permisoId));
-
-			const usuarios = await this.userModel.find({role: id});
-
-			usuarios.forEach((usuario: any) => {
-				permisosRemovidos.forEach((permisoId) => {
-					this.notific.notifyPermissionChange(usuario._id, 'PERMISSION_REMOVED', permisoId);
-				});
-				permisosAgregados.forEach((permisoId) => {
-					this.notific.notifyPermissionChange(usuario._id, 'PERMISSION_ADDED', permisoId);
-				});
+			const role = await this.roleRepository.findOne({
+				where: {id},
+				relations: ['permisos'],
 			});
 
-			return apiResponse(200, 'Rol actualizado con éxito.', rolActualizado, null);
+			if (!role) {
+				return apiResponse(404, 'Rol no encontrado.', null, null);
+			}
+
+			// Actualiza el rol con los nuevos datos
+			await this.roleRepository.update(id, data);
+
+			// Notificar cambios de permisos
+			const updatedRole = await this.roleRepository.findOne({
+				where: {id},
+				relations: ['permisos'],
+			});
+
+			if (updatedRole) {
+				// Comparar permisos eliminados/agregados
+				const removedPermissions = role.permisos.filter((permiso) => !updatedRole.permisos.includes(permiso));
+				const addedPermissions = updatedRole.permisos.filter((permiso) => !role.permisos.includes(permiso));
+
+				const users = await this.userRepository.find({where: {role: id}});
+				users.forEach((user) => {
+					removedPermissions.forEach((permiso) => {
+						this.notific.notifyPermissionChange(user.id, 'PERMISSION_REMOVED', permiso.id);
+					});
+					addedPermissions.forEach((permiso) => {
+						this.notific.notifyPermissionChange(user.id, 'PERMISSION_ADDED', permiso.id);
+					});
+				});
+			}
+
+			return apiResponse(200, 'Rol actualizado con éxito.', updatedRole, null);
 		} catch (error) {
 			console.error(error);
 			return apiResponse(500, 'ERROR', null, error);
@@ -158,10 +159,12 @@ export class RoleService implements OnModuleInit {
 
 	async deleteRole(id: string): Promise<any> {
 		try {
-			const role = await this.roleModel.findByIdAndDelete(id);
+			const role = await this.roleRepository.findOne({where: {id}});
 			if (!role) {
 				return apiResponse(404, 'Rol no encontrado.', null, null);
 			}
+
+			await this.roleRepository.remove(role);
 			return apiResponse(200, 'Rol eliminado con éxito.', null, null);
 		} catch (error) {
 			console.error(error);
@@ -169,81 +172,62 @@ export class RoleService implements OnModuleInit {
 		}
 	}
 
-	async createBatch(CreateRoleUserDto: CreateRoleUserDto[]) {
-		const createdUsers = [];
+	async createBatch(CreateRoleUserDto: CreateRoleUserDto[]): Promise<any> {
+		const createdRoles = [];
 		const errors = [];
 
-		for (const userDto of CreateRoleUserDto) {
+		for (const roleDto of CreateRoleUserDto) {
 			try {
-				const createdUser = await this.roleModel.create(userDto);
-				createdUsers.push(createdUser);
-			} catch (error) {
-				// Aquí puedes filtrar o registrar el error según necesites
-				if (error.code === 11000) {
-					// 11000 es el código de error para duplicados
-					errors.push({
-						user: userDto,
-						message: 'Usuario ya existente',
-					});
-				} else {
-					// Manejar otros tipos de errores si es necesario
-					errors.push({
-						user: userDto,
-						message: error.message,
-					});
-				}
-			}
-		}
-
-		return apiResponse(
-			errors.length > 0 ? 207 : 201,
-			errors.length > 0 ? 'Hubieron algunos errores al crear los usuarios.' : 'Creación de usuarios exitosa.',
-			createdUsers,
-			errors,
-		);
-	}
-
-	async updateBatch(updateUsersDto: UpdateRoleUserDto[]): Promise<any> {
-		const updatedUsers: User[] = [];
-		const errors = [];
-
-		for (const dtoUser of updateUsersDto) {
-			try {
-				const user = await this.userModel.findByIdAndUpdate(dtoUser._id, dtoUser, {new: true});
-				if (!user) {
-					errors.push({
-						id: dtoUser._id,
-						message: `Usuario con ID ${dtoUser._id} no encontrado`,
-					});
-					continue; // Si no se encuentra el usuario, continuar con el siguiente
-				}
-				updatedUsers.push(user);
+				const createdRole = this.roleRepository.create(roleDto);
+				await this.roleRepository.save(createdRole);
+				createdRoles.push(createdRole);
 			} catch (error) {
 				errors.push({
-					id: dtoUser._id,
+					role: roleDto,
 					message: error.message,
 				});
 			}
 		}
 
-		return apiResponse(
-			errors.length > 0 ? 207 : 200, // 207 para "Multi-Status" si hay errores, 200 si todo fue exitoso
-			errors.length > 0 ? 'Algunos usuarios no pudieron ser actualizados.' : 'Actualización de usuarios exitosa.',
-			updatedUsers,
-			errors,
-		);
+		return apiResponse(errors.length > 0 ? 207 : 201, errors.length > 0 ? 'Hubieron algunos errores al crear los roles.' : 'Creación de roles exitosa.', createdRoles, errors);
 	}
 
-	async getDefaultRole(): Promise<RoleUser | null> {
-		try {
-			const defaultRole = await this.roleModel.findOne({is_default: true});
-			if (!defaultRole) {
-				return null;
+	async updateBatch(updateUsersDto: UpdateRoleUserDto[]): Promise<any> {
+		const updatedRoles = [];
+		const errors = [];
+
+		for (const dtoRole of updateUsersDto) {
+			try {
+				const role = await this.roleRepository.findOne({where: {id: dtoRole.id}});
+				if (!role) {
+					errors.push({
+						id: dtoRole.id,
+						message: `Rol con ID ${dtoRole.id} no encontrado`,
+					});
+					continue;
+				}
+
+				await this.roleRepository.update(dtoRole.id, dtoRole);
+				const updatedRole = await this.roleRepository.findOne({where: {id: dtoRole.id}});
+				updatedRoles.push(updatedRole);
+			} catch (error) {
+				errors.push({
+					id: dtoRole.id,
+					message: error.message,
+				});
 			}
-			return defaultRole;
+		}
+
+		return apiResponse(errors.length > 0 ? 207 : 200, errors.length > 0 ? 'Algunos roles no pudieron ser actualizados.' : 'Actualización de roles exitosa.', updatedRoles, errors);
+	}
+
+	async getDefaultRole(): Promise<Role | null> {
+		try {
+			const defaultRole = await this.roleRepository.findOne({where: {is_default: true}});
+			return defaultRole || null;
 		} catch (error) {
 			console.error(error);
-			return error;
+			return null;
 		}
 	}
 }

@@ -1,7 +1,8 @@
-import {Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, OneToMany} from 'typeorm';
-import { User } from './User';
+import {Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, OneToMany, ManyToMany, JoinTable} from 'typeorm';
+import {User} from './User';
+import {Permission} from './Permission';
 
-@Entity()
+@Entity('roles')
 export class Role {
 	@PrimaryGeneratedColumn('uuid')
 	id: string;
@@ -9,22 +10,43 @@ export class Role {
 	@Column({length: 50, unique: true})
 	name: string;
 
-	@Column('uuid', {array: true, default: () => 'ARRAY[]::uuid[]'})
-	permissions: string[];
-
 	@Column({length: 20})
 	access_scope: string;
 
 	@Column({default: false})
 	is_default: boolean;
 
-	// Relación con la tabla de usuarios (un rol puede tener múltiples usuarios)
 	@OneToMany(() => User, (user) => user.role)
 	users: User[];
 
-	@CreateDateColumn()
+	@ManyToMany(() => Permission, (permission) => permission.roles, {
+		cascade: true,
+		onDelete: 'CASCADE',
+	})
+	@JoinTable({
+		name: 'role_permissions',
+		joinColumn: {
+			name: 'role_id',
+			referencedColumnName: 'id',
+		},
+		inverseJoinColumn: {
+			name: 'permission_id',
+			referencedColumnName: 'id',
+		},
+	})
+	permissions: Permission[];
+
+	@CreateDateColumn({
+		name: 'created_at',
+		type: 'timestamp',
+		default: () => 'CURRENT_TIMESTAMP',
+	})
 	created_at: Date;
 
-	@UpdateDateColumn()
+	@UpdateDateColumn({
+		name: 'updated_at',
+		type: 'timestamp',
+		default: () => 'CURRENT_TIMESTAMP',
+	})
 	updated_at: Date;
 }

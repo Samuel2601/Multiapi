@@ -8,7 +8,7 @@ import {apiResponse} from 'src/common/helpers/apiResponse';
 import {Permission} from 'src/entity/Permission';
 import {User} from 'src/entity/User';
 import {CreatePermissionDto, UpdatePermissionDto} from './permiso.dto';
-import { HttpAdapterHost } from '@nestjs/core';
+import {HttpAdapterHost} from '@nestjs/core';
 
 @Injectable()
 export class PermisoService implements OnModuleInit {
@@ -50,7 +50,8 @@ export class PermisoService implements OnModuleInit {
 						users: [], // Aquí puedes añadir usuarios si es necesario
 						is_default: false,
 					});
-
+					{
+					}
 					try {
 						await this.permissionRepository.save(permission);
 						console.log(`Permiso guardado: ${permission.name} ${permission.method}`);
@@ -89,8 +90,8 @@ export class PermisoService implements OnModuleInit {
 		}
 	}
 
-	async createRole(createRoleDto: CreatePermissionDto): Promise<any> {
-		const {name, method, users} = createRoleDto;
+	async createPermiso(createPermisoDto: CreatePermissionDto): Promise<any> {
+		const {name, method, users} = createPermisoDto;
 		try {
 			const existingPermission = await this.permissionRepository.findOne({where: {name}});
 			if (existingPermission) {
@@ -106,7 +107,7 @@ export class PermisoService implements OnModuleInit {
 				});
 				if (userData) {
 					await this.emailService.sendNotification(userData.email, 'Nuevo permiso otorgado', 'src/emailTemplates/newPermissUser.html', {
-						userName: `${userData.name} ${userData.lastName}`,
+						userName: `${userData.name} ${userData.last_name}`,
 						permissionName: name,
 						permissionMethod: method,
 					});

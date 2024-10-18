@@ -1,7 +1,9 @@
-import {IsString, IsNotEmpty, IsEmail, IsOptional, IsBoolean, IsMongoId, MinLength} from 'class-validator';
+import {IsString, IsNotEmpty, IsEmail, IsOptional, IsBoolean, IsUUID, MinLength, ValidateNested} from 'class-validator';
+import {Role} from 'src/entity/Role';
+import {Type} from 'class-transformer';
 
 /**
- * DTO para crear un nuevo usuario.
+ * DTO para crear un nuevo usuario en PostgreSQL.
  */
 export class CreateUserDto {
 	/**
@@ -30,7 +32,7 @@ export class CreateUserDto {
 	 */
 	@IsString()
 	@IsOptional()
-	phone?: string; // Cambiado de 'telf' a 'phone' para que coincida con el esquema
+	phone?: string;
 
 	/**
 	 * Correo electrónico del usuario.
@@ -48,25 +50,26 @@ export class CreateUserDto {
 	password?: string;
 
 	/**
-	 * Estado del usuario (activo o inactivo).
+	 * Indicador de si el usuario está verificado.
 	 */
 	@IsBoolean()
 	@IsOptional()
-	verificado?: boolean; // Agregado tipo booleano para la validación
+	verificado?: boolean;
 
 	/**
 	 * Estado del usuario (activo o inactivo).
 	 */
 	@IsBoolean()
 	@IsOptional()
-	status?: boolean; // Agregado tipo booleano para la validación
+	status?: boolean;
 
 	/**
-	 * Rol del usuario (referencia al ID de rol).
+	 * Rol del usuario (referencia al objeto rol).
 	 */
-	@IsMongoId({message: 'Invalid ID format'})
+	@ValidateNested() // Para validar que sea un objeto
+	@Type(() => Role) // Asegúrate de importar y usar el tipo correcto
 	@IsOptional()
-	role: string; // Mantén esto como string, ya que es una referencia a un ObjectId en tu esquema
+	role?: Role;
 
 	/**
 	 * URL de la foto del usuario (opcional).
@@ -87,11 +90,15 @@ export class CreateUserDto {
 }
 
 /**
- * DTO para actualizar un usuario existente.
+ * DTO para actualizar un usuario existente en PostgreSQL.
  */
 export class UpdateUserDto {
-	@IsMongoId()
-	_id: string;
+	/**
+	 * UUID del usuario.
+	 */
+	@IsUUID()
+	id: string;
+
 	/**
 	 * Nombre del usuario (opcional).
 	 */
@@ -136,25 +143,33 @@ export class UpdateUserDto {
 	password?: string;
 
 	/**
-	 * Indicador de si el usuario está verificado (opcional).
+	 * Indicador de si el usuario está verificado.
 	 */
 	@IsBoolean()
 	@IsOptional()
 	verificado?: boolean;
 
 	/**
-	 * Estado del usuario (activo o inactivo) (opcional).
+	 * Estado del usuario (activo o inactivo).
 	 */
 	@IsBoolean()
 	@IsOptional()
 	status?: boolean;
 
 	/**
-	 * ID del rol asociado al usuario (opcional).
+	 * Rol del usuario (referencia al objeto rol).
 	 */
-	@IsMongoId()
+	@ValidateNested() // Para validar que sea un objeto
+	@Type(() => Role) // Asegúrate de importar y usar el tipo correcto
 	@IsOptional()
-	role?: string;
+	role?: Role;
+
+	/**
+	 * URL de la foto del usuario (opcional).
+	 */
+	@IsString()
+	@IsOptional()
+	photo?: string;
 
 	/**
 	 * Redes sociales del usuario (opcional).
@@ -165,31 +180,4 @@ export class UpdateUserDto {
 		providerId: string; // ID del usuario en el proveedor
 		profileUrl?: string; // URL de perfil del usuario en esa red social
 	}[];
-
-	/**
-	 * URL de la foto del usuario (opcional).
-	 */
-	@IsString()
-	@IsOptional()
-	photo?: string;
-
-	/**
-	 * Código de verificación del usuario (opcional).
-	 */
-	@IsString()
-	@IsOptional()
-	verificationCode?: string;
-
-	/**
-	 * Fecha de creación del usuario (opcional).
-	 */
-	@IsOptional()
-	createdAt?: Date;
-
-	/**
-	 * Contraseña temporal del usuario (opcional).
-	 */
-	@IsString()
-	@IsOptional()
-	password_temp?: string;
 }

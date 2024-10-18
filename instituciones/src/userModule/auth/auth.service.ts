@@ -243,7 +243,7 @@ export class AuthService {
 			// Enviar notificación de inicio de sesión
 			this.emailService.sendNotification(user.email, 'Inicio de sesión en tu cuenta', 'src/emailTemplates/sessionNotification.html', {
 				name: user.name,
-				lastName: user.lastName,
+				lastName: user.last_name,
 				provider,
 				resetPasswordUrl: 'https://tu-app.com/reset-password',
 			});
@@ -251,7 +251,7 @@ export class AuthService {
 			// Si no existe el usuario, creamos uno nuevo
 			user = this.userRepository.create({
 				name: userData.given_name || userData.name || userData.givenName || '',
-				lastName: userData.family_name || userData.surname || '',
+				last_name: userData.family_name || userData.surname || '',
 				email: email,
 				verificado: true,
 				redes: [], // Iniciamos con redes vacías, las añadimos después
@@ -271,7 +271,7 @@ export class AuthService {
 			// Enviar correo de bienvenida
 			this.emailService.sendNotification(user.email, 'Nuevo usuario registrado', 'src/emailTemplates/welcome_provaider.html', {
 				name: user.name,
-				lastName: user.lastName,
+				lastName: user.last_name,
 				email: user.email,
 			});
 		}

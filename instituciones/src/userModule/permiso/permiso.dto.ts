@@ -1,5 +1,9 @@
-import { IsNotEmpty, IsBoolean, IsString, ArrayNotEmpty, IsArray, IsOptional, IsUUID } from 'class-validator';
-
+import {IsNotEmpty, IsBoolean, IsString, ArrayNotEmpty, IsArray, IsOptional, IsUUID, ValidateNested} from 'class-validator';
+import {Type} from 'class-transformer';
+class UsernDto {
+	@IsUUID()
+	id: string;
+}
 export class CreatePermissionDto {
 	@IsNotEmpty()
 	@IsString()
@@ -11,7 +15,7 @@ export class CreatePermissionDto {
 
 	@IsOptional()
 	@IsArray()
-	@IsUUID('all', { each: true }) // Usando UUID como tipo de ID
+	@IsUUID('all', {each: true}) // Usando UUID como tipo de ID
 	readonly users?: string[]; // Cambiado de Types.ObjectId[] a string[]
 
 	@IsOptional()
@@ -34,8 +38,8 @@ export class UpdatePermissionDto {
 
 	@IsOptional()
 	@IsArray()
-	@IsUUID('all', { each: true }) // Usando UUID como tipo de ID
-	readonly users?: string[];
+	@IsUUID('all', {each: true}) // Usando UUID como tipo de ID
+	readonly users?: string[]; // Cambiado de Types.ObjectId[] a string[]
 
 	@IsOptional()
 	@IsBoolean()

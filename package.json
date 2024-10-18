@@ -1,0 +1,12 @@
+{
+	"dependencies": {
+		"@nestjs/websockets": "^10.4.5",
+		"class-transformer": "^0.5.1",
+		"express-session": "^1.18.1",
+		"socket.io": "^4.8.0"
+	},
+	"devDependencies": {
+		"@types/express": "^5.0.0",
+		"@types/multer": "^1.4.12"
+	}
+}

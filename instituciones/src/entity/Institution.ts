@@ -19,9 +19,20 @@ export class Institution {
 	@JoinColumn({name: 'id_user'})
 	user: User;
 
-	@CreateDateColumn()
+	@Column({type: 'boolean', default: true})
+	status: boolean;
+
+	@CreateDateColumn({
+		name: 'created_at',
+		type: 'timestamp',
+		default: () => 'CURRENT_TIMESTAMP',
+	})
 	created_at: Date;
 
-	@UpdateDateColumn()
+	@UpdateDateColumn({
+		name: 'updated_at',
+		type: 'timestamp',
+		default: () => 'CURRENT_TIMESTAMP',
+	})
 	updated_at: Date;
 }
