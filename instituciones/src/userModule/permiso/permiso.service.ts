@@ -67,14 +67,35 @@ export class PermisoService implements OnModuleInit {
 		}
 	}
 
-	async findAllfilter(params: any, relations: string[] = []): Promise<any> {
+	async findAllfilter(filterParams: any, relationArray: string[], page: number, limit: number): Promise<any> {
 		try {
-			const data = await this.permissionRepository.find({
+			/*const data = await this.permissionRepository.find({
 				where: params,
 				order: {created_at: 'DESC'},
 				relations,
+			});*/
+
+			const queryBuilder = this.permissionRepository.createQueryBuilder('permission');
+
+			// Añadir relaciones
+			relationArray.forEach((relation) => {
+				queryBuilder.leftJoinAndSelect(`permission.${relation}`, relation);
 			});
-			return apiResponse(200, 'Permisos obtenidos con éxito.', data, null);
+
+			// Aplicar filtros
+			for (const key in filterParams) {
+				const value = filterParams[key];
+				const condition = key.includes('.') ? `permission.${key}` : `permission.${key}`;
+				queryBuilder.andWhere(`${condition} = :${key}`, {[key]: value});
+			}
+
+			// Paginación
+			const [permissions, total] = await queryBuilder
+				.skip((page - 1) * limit)
+				.take(limit)
+				.getManyAndCount();
+
+			return apiResponse(200, 'Permisos obtenidos con éxito.', {permissions, total}, null);
 		} catch (error) {
 			console.error(error);
 			return apiResponse(500, 'ERROR', null, error);

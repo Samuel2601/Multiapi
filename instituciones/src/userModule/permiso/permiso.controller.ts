@@ -22,10 +22,10 @@ export class PermisoController {
 	@Get()
 	@UseGuards(DynamicQueryValidationGuard)
 	@Entity(Permission)
-	async findAllFilterRelation(@Query('filter') filter: string, @Query('relations') relations: string): Promise<any> {
+	async findAllFilterRelation(@Query('filter') filter: string, @Query('relations') relations: string, @Query('page') page: number, @Query('limit') limit: number): Promise<any> {
 		const filterParams = filter ? JSON.parse(filter) : {};
 		const relationArray = relations ? relations.split(',') : [];
-		return await this.permissionService.findAllfilter(filterParams, relationArray);
+		return await this.permissionService.findAllfilter(filterParams, relationArray, page, limit);
 	}
 
 	// Obtener un permiso por su ID
