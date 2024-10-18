@@ -5,9 +5,10 @@ import {CreateRoleUserDto, UpdateRoleUserDto} from './role.dto';
 import {PermisoService} from '../permiso/permiso.service';
 import {InjectRepository} from '@nestjs/typeorm';
 import {Repository} from 'typeorm';
-import {Role} from 'src/entity/Role';
-import {User} from 'src/entity/User';
-import {Permission} from 'src/entity/Permission';
+import {Role} from 'src/entity/Role.entity';
+import {User} from 'src/entity/User.entity';
+import {Permission} from 'src/entity/Permission.entity';
+import {FindByIdDto} from 'src/common/dto/id.dto';
 
 @Injectable()
 export class RoleService implements OnModuleInit {
@@ -37,7 +38,7 @@ export class RoleService implements OnModuleInit {
 			// Crear y guardar el rol de administrador
 			const adminRole = this.roleRepository.create({
 				name: 'admin',
-				permisos: existingPermissions, // Aquí asignamos directamente los permisos
+				permissions: existingPermissions, // Aquí asignamos directamente los permisos
 				is_default: true,
 				access_scope: 'all',
 			});
@@ -53,21 +54,13 @@ export class RoleService implements OnModuleInit {
 	 * Devuelve una lista de todos los usuarios en la base de datos.
 	 * @returns Promesa que resuelve con una lista de usuarios.
 	 */
-	async findAllfilter(params: any, populateFields: string[] = []): Promise<any> {
+	async findAllfilter(params: any, relations: string[] = []): Promise<any> {
 		try {
-			const query = this.roleRepository.createQueryBuilder('role');
-
-			// Agregar filtros
-			if (params) {
-				query.where(params);
-			}
-
-			// Agregar poblaciones de relaciones
-			populateFields.forEach((field) => {
-				query.leftJoinAndSelect(`role.${field}`, field);
+			const data = await this.roleRepository.find({
+				where: params,
+				order: {created_at: 'DESC'},
+				relations,
 			});
-
-			const data = await query.getMany();
 			return apiResponse(200, 'Roles obtenidos con éxito.', data, null);
 		} catch (error) {
 			console.error(error);
@@ -75,10 +68,10 @@ export class RoleService implements OnModuleInit {
 		}
 	}
 
-	async findById(id: string): Promise<any> {
+	async findById(param: FindByIdDto): Promise<any> {
 		try {
 			const role = await this.roleRepository.findOne({
-				where: {id},
+				where: {id: param.id},
 				relations: ['permisos'], // Relacionar permisos
 			});
 
@@ -94,7 +87,7 @@ export class RoleService implements OnModuleInit {
 	}
 
 	async createRole(createRoleDto: CreateRoleUserDto): Promise<any> {
-		const {name, permisos} = createRoleDto;
+		const {name, permisos, is_default} = createRoleDto;
 
 		// Verifica si ya existe un rol con el mismo nombre
 		const existingRole = await this.roleRepository.findOne({where: {name}});
@@ -107,18 +100,19 @@ export class RoleService implements OnModuleInit {
 		// Crear nuevo rol con los permisos asignados
 		const newRole = this.roleRepository.create({
 			name,
-			permisos: assignedPermissions,
+			permissions: assignedPermissions,
+			is_default,
 		});
 
 		await this.roleRepository.save(newRole);
 		return apiResponse(201, 'Rol creado con éxito.', newRole, null);
 	}
 
-	async updateRole(id: string, data: UpdateRoleUserDto): Promise<any> {
+	async updateRole(param: FindByIdDto, data: UpdateRoleUserDto): Promise<any> {
 		try {
 			const role = await this.roleRepository.findOne({
-				where: {id},
-				relations: ['permisos'],
+				where: {id: param.id},
+				relations: ['permissions'],
 			});
 
 			if (!role) {
@@ -126,20 +120,20 @@ export class RoleService implements OnModuleInit {
 			}
 
 			// Actualiza el rol con los nuevos datos
-			await this.roleRepository.update(id, data);
+			await this.roleRepository.update(param.id, data);
 
 			// Notificar cambios de permisos
 			const updatedRole = await this.roleRepository.findOne({
-				where: {id},
+				where: {id: param.id},
 				relations: ['permisos'],
 			});
 
 			if (updatedRole) {
 				// Comparar permisos eliminados/agregados
-				const removedPermissions = role.permisos.filter((permiso) => !updatedRole.permisos.includes(permiso));
-				const addedPermissions = updatedRole.permisos.filter((permiso) => !role.permisos.includes(permiso));
+				const removedPermissions = role.permissions.filter((permiso) => !updatedRole.permissions.includes(permiso));
+				const addedPermissions = updatedRole.permissions.filter((permiso) => !role.permissions.includes(permiso));
 
-				const users = await this.userRepository.find({where: {role: id}});
+				const users = await this.userRepository.find({where: {role: param}});
 				users.forEach((user) => {
 					removedPermissions.forEach((permiso) => {
 						this.notific.notifyPermissionChange(user.id, 'PERMISSION_REMOVED', permiso.id);
@@ -157,9 +151,9 @@ export class RoleService implements OnModuleInit {
 		}
 	}
 
-	async deleteRole(id: string): Promise<any> {
+	async deleteRole(param: FindByIdDto): Promise<any> {
 		try {
-			const role = await this.roleRepository.findOne({where: {id}});
+			const role = await this.roleRepository.findOne({where: {id: param.id}});
 			if (!role) {
 				return apiResponse(404, 'Rol no encontrado.', null, null);
 			}

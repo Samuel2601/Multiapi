@@ -1,5 +1,5 @@
 import {Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn, UpdateDateColumn} from 'typeorm';
-import {Institution} from './Institution';
+import {Institution} from './Institution.entity';
 
 @Entity()
 export class Access {

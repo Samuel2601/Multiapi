@@ -1,5 +1,5 @@
 import {Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToMany} from 'typeorm';
-import {Role} from './Role';
+import {Role} from './Role.entity';
 
 @Entity('permissions')
 export class Permission {

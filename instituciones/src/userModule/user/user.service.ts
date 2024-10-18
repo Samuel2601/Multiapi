@@ -6,8 +6,8 @@ import * as bcrypt from 'bcrypt';
 import {apiResponse} from 'src/common/helpers/apiResponse';
 import {RoleService} from '../role/role.service';
 import {EmailService} from 'src/common/email/email.service';
-import {User} from 'src/entity/User';
-import {Role} from 'src/entity/Role';
+import {User} from 'src/entity/User.entity';
+import {Role} from 'src/entity/Role.entity';
 
 /**
  * Esta clase maneja las operaciones CRUD para los usuarios en PostgreSQL.

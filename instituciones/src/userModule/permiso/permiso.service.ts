@@ -5,8 +5,8 @@ import {Repository} from 'typeorm';
 import {EmailService} from 'src/common/email/email.service';
 import {NotificationsService} from 'src/socket.io/notifications.service';
 import {apiResponse} from 'src/common/helpers/apiResponse';
-import {Permission} from 'src/entity/Permission';
-import {User} from 'src/entity/User';
+import {Permission} from 'src/entity/Permission.entity';
+import {User} from 'src/entity/User.entity';
 import {CreatePermissionDto, UpdatePermissionDto} from './permiso.dto';
 import {HttpAdapterHost} from '@nestjs/core';
 
@@ -67,10 +67,14 @@ export class PermisoService implements OnModuleInit {
 		}
 	}
 
-	async findAll(params: any): Promise<any> {
+	async findAllfilter(params: any, relations: string[] = []): Promise<any> {
 		try {
-			const permissions = await this.permissionRepository.find({where: params, order: {created_at: 'DESC'}});
-			return apiResponse(200, 'Permisos obtenidos con éxito.', permissions, null);
+			const data = await this.permissionRepository.find({
+				where: params,
+				order: {created_at: 'DESC'},
+				relations,
+			});
+			return apiResponse(200, 'Permisos obtenidos con éxito.', data, null);
 		} catch (error) {
 			console.error(error);
 			return apiResponse(500, 'ERROR', null, error);

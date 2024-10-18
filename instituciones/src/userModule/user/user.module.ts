@@ -1,29 +1,21 @@
-import {Module} from '@nestjs/common';
-import {MongooseModule} from '@nestjs/mongoose';
+import {forwardRef, Module} from '@nestjs/common';
 import {UserService} from './user.service';
 import {UserController} from './user.controller';
 
-import {User, UserSchema} from 'src/userModule/models/user.schema';
-import {RoleUser, RoleUserSchema} from 'src/userModule/models/roleuser.schema';
-import {Permission, PermissionSchema} from '../models/permiso.schema';
 import {RoleModule} from '../role/role.module';
 import {NotificationsModule} from 'src/socket.io/notifications.module';
-import {CriterioModule} from 'src/common/dto/params&populate/criterioFormat.module';
-import { EmailModule } from 'src/common/email/email.module';
+import {EmailModule} from 'src/common/email/email.module';
+import {TypeOrmModule} from '@nestjs/typeorm';
+import {User} from 'src/entity/User.entity';
+import {Role} from 'src/entity/Role.entity';
+import {Permission} from 'src/entity/Permission.entity';
+import {SocialNetwork} from 'src/entity/SocialNetwork.entity';
 
 @Module({
 	imports: [
-		MongooseModule.forFeature([
-			{
-				name: User.name,
-				schema: UserSchema,
-			},
-			{name: RoleUser.name, schema: RoleUserSchema},
-			{name: Permission.name, schema: PermissionSchema},
-		]),
-		RoleModule,
+		TypeOrmModule.forFeature([User, Role, Permission,SocialNetwork]), // Cambia MongooseModule por TypeOrmModule
+		forwardRef(() => RoleModule),
 		NotificationsModule,
-		CriterioModule,
 		EmailModule,
 	],
 	providers: [UserService],

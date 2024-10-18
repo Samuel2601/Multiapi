@@ -1,5 +1,5 @@
 import {IsString, IsNotEmpty, IsEmail, IsOptional, IsBoolean, IsUUID, MinLength, ValidateNested} from 'class-validator';
-import {Role} from 'src/entity/Role';
+import {Role} from 'src/entity/Role.entity';
 import {Type} from 'class-transformer';
 
 /**

@@ -1,6 +1,6 @@
 import {Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, ManyToOne, OneToMany, UpdateDateColumn} from 'typeorm'; // Relación con SocialNetwork
-import {Role} from './Role';
-import {SocialNetwork} from './SocialNetwork';
+import {Role} from './Role.entity';
+import {SocialNetwork} from './SocialNetwork.entity';
 
 @Entity('users')
 export class User {

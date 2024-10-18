@@ -11,6 +11,10 @@ export class CreateRoleUserDto {
 	readonly name: string;
 
 	@IsOptional()
+	@IsString()
+	readonly access_scope?: string;
+
+	@IsOptional()
 	@IsArray()
 	@ValidateNested({each: true})
 	@Type(() => PermissionDto)
@@ -23,12 +27,16 @@ export class CreateRoleUserDto {
 
 export class UpdateRoleUserDto {
 	@IsNotEmpty() // Asegurarse que este campo esté presente
-	@IsInt()
-	readonly id: number; // Cambiado a number para ID
+	@IsUUID()
+	readonly id: string; // Cambiado a number para ID
 
 	@IsOptional()
 	@IsString()
 	readonly name?: string;
+
+	@IsOptional()
+	@IsString()
+	readonly access_scope?: string;
 
 	@IsOptional()
 	@IsArray()

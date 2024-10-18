@@ -11,8 +11,8 @@ import * as cryptoO from 'crypto';
 import {EmailService} from 'src/common/email/email.service';
 import {InjectRepository} from '@nestjs/typeorm';
 import {Repository} from 'typeorm';
-import {User} from 'src/entity/User';
-import {SocialNetwork} from 'src/entity/SocialNetwork';
+import {User} from 'src/entity/User.entity';
+import {SocialNetwork} from 'src/entity/SocialNetwork.entity';
 interface GooglePayload {
 	sub: string;
 	email: string;

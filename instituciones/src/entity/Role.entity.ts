@@ -1,6 +1,6 @@
 import {Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, OneToMany, ManyToMany, JoinTable} from 'typeorm';
-import {User} from './User';
-import {Permission} from './Permission';
+import {User} from './User.entity';
+import {Permission} from './Permission.entity';
 
 @Entity('roles')
 export class Role {
@@ -10,7 +10,7 @@ export class Role {
 	@Column({length: 50, unique: true})
 	name: string;
 
-	@Column({length: 20})
+	@Column({length: 20, default: 'own'})
 	access_scope: string;
 
 	@Column({default: false})

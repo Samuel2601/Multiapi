@@ -1,5 +1,5 @@
 import {Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn, UpdateDateColumn} from 'typeorm';
-import {User} from './User';
+import {User} from './User.entity';
 
 @Entity()
 export class Institution {

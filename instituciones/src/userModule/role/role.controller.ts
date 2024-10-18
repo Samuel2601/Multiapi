@@ -1,25 +1,30 @@
-import {Body, Query, Controller, Delete, Get, Param, Post, Put, UsePipes, ValidationPipe, Injectable} from '@nestjs/common';
+import {Body, Query, Controller, Delete, Get, Param, Post, Put, UsePipes, ValidationPipe, Injectable, UseGuards} from '@nestjs/common';
 
 import * as Dto from './role.dto';
 import {RoleService} from './role.service';
 import {FindByIdDto} from 'src/common/dto/id.dto';
+import {DynamicQueryValidationGuard} from 'src/common/guards/query-validation.guard';
+import {Role} from 'src/entity/Role.entity';
+import {Entity} from 'src/common/decorators/entity.decorator';
 
 @Controller('/roles')
 @Injectable()
 export class RoleController {
-	constructor(
-		private readonly rolesService: RoleService,
-	) {}
+	constructor(private readonly rolesService: RoleService) {}
 
 	@Get()
-	async getAllRoltefilter(@Query() query): Promise<any> {
-		return await this.rolesService.findAllfilter(query);
+	@UseGuards(DynamicQueryValidationGuard)
+	@Entity(Role)
+	async findAllFilterRelation(@Query('filter') filter: string, @Query('relations') relations: string): Promise<any> {
+		const filterParams = filter ? JSON.parse(filter) : {};
+		const relationArray = relations ? relations.split(',') : [];
+		return await this.rolesService.findAllfilter(filterParams, relationArray);
 	}
 
 	@Get('/:id')
 	@UsePipes(new ValidationPipe({transform: true}))
 	async findById(@Param() params: FindByIdDto): Promise<any> {
-		return await this.rolesService.findById(params.id);
+		return await this.rolesService.findById(params);
 	}
 
 	@Post('')
@@ -31,13 +36,13 @@ export class RoleController {
 	@Put('/:id')
 	@UsePipes(new ValidationPipe({transform: true}))
 	async updateRole(@Param() params: FindByIdDto, @Body() rolDto: Dto.UpdateRoleUserDto): Promise<any> {
-		return await this.rolesService.updateRole(params.id, rolDto);
+		return await this.rolesService.updateRole(params, rolDto);
 	}
 
 	@Delete('/:id')
 	@UsePipes(new ValidationPipe({transform: true}))
 	async deleteRole(@Param() params: FindByIdDto): Promise<any> {
-		return await this.rolesService.deleteRole(params.id);
+		return await this.rolesService.deleteRole(params);
 	}
 
 	@Post('batch')
