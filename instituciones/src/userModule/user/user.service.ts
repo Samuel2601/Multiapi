@@ -8,6 +8,27 @@ import {RoleService} from '../role/role.service';
 import {EmailService} from 'src/common/email/email.service';
 import {User} from 'src/entity/User.entity';
 import {Role} from 'src/entity/Role.entity';
+import {Permission} from 'src/entity/Permission.entity';
+
+interface FilterParams<User> {
+	[key: string]: {
+		value: any;
+		operator?: string; // Operador personalizado
+	};
+}
+
+interface PaginationParams {
+	page: number;
+	limit: number;
+}
+
+interface QueryOptions {
+	relations?: string[];
+	select?: (keyof User)[];
+	order?: {
+		[key: string]: 'ASC' | 'DESC'; // Asegúrate de que el valor sea solo 'ASC' o 'DESC'
+	};
+}
 
 /**
  * Esta clase maneja las operaciones CRUD para los usuarios en PostgreSQL.
@@ -17,6 +38,7 @@ export class UserService {
 	constructor(
 		@InjectRepository(User) private readonly userRepository: Repository<User>,
 		@InjectRepository(Role) private readonly roleRepository: Repository<Role>,
+		@InjectRepository(Permission) private readonly permissRepository: Repository<Permission>,
 		private readonly roleService: RoleService,
 		private readonly emailService: EmailService,
 	) {}
@@ -37,6 +59,78 @@ export class UserService {
 			console.error(error);
 			return apiResponse(500, 'ERROR', null, error);
 		}
+	}
+
+	async getAllFiltered<K extends keyof User>(filterParams: FilterParams<User>, paginationParams: PaginationParams, queryOptions: QueryOptions): Promise<any> {
+		const {page, limit} = paginationParams;
+
+		// Validar paginación
+		if (page < 1 || limit < 1) {
+			throw new Error('Page and limit should be greater than 0');
+		}
+
+		const queryBuilder = this.userRepository.createQueryBuilder('user');
+
+		// Añadir joins para las relaciones
+		queryOptions.relations?.forEach((relation) => {
+			queryBuilder.leftJoinAndSelect(`user.${relation}`, relation);
+		});
+
+		// Construcción dinámica de filtros con operadores
+		Object.entries(filterParams).forEach(([field, filter]) => {
+			const {value, operator = '='} = filter;
+			if (value !== undefined) {
+				let queryCondition: string;
+				const [relationName, relationField] = field.split('.');
+				const paramName = `${relationName}_${relationField || 'value'}`;
+
+				switch (operator) {
+					case 'LIKE':
+					case 'ILIKE':
+						queryCondition = relationField ? `${relationName}.${relationField} ${operator} :${paramName}` : `user.${field} ${operator} :${paramName}`;
+						queryBuilder.andWhere(queryCondition, {[paramName]: `%${value}%`});
+						break;
+					case 'IN':
+						queryCondition = relationField ? `${relationName}.${relationField} IN (:...${paramName})` : `user.${field} IN (:...${paramName})`;
+						queryBuilder.andWhere(queryCondition, {[paramName]: value});
+						break;
+					case 'BETWEEN':
+						if (Array.isArray(value) && value.length === 2) {
+							queryCondition = relationField ? `${relationName}.${relationField} BETWEEN :start AND :end` : `user.${field} BETWEEN :start AND :end`;
+							queryBuilder.andWhere(queryCondition, {start: value[0], end: value[1]});
+						}
+						break;
+					default:
+						queryCondition = relationField ? `${relationName}.${relationField} ${operator} :${paramName}` : `user.${field} ${operator} :${paramName}`;
+						queryBuilder.andWhere(queryCondition, {[paramName]: value});
+				}
+			}
+		});
+
+		// Selección condicional de columnas
+		if (queryOptions.select?.length > 0) {
+			queryBuilder.select(queryOptions.select.map((col) => `entity.${col}`));
+		}
+
+		// Ordenamiento
+		if (queryOptions.order) {
+			Object.entries(queryOptions.order).forEach(([field, direction]) => {
+				queryBuilder.addOrderBy(`entity.${field}`, direction);
+			});
+		}
+
+		// Paginación
+		const [items, total] = await queryBuilder
+			.skip((page - 1) * limit)
+			.take(limit)
+			.getManyAndCount();
+
+		return {
+			items,
+			page,
+			limit,
+			total,
+		};
 	}
 
 	/**

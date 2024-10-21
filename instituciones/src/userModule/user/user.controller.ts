@@ -13,13 +13,46 @@ export class UserController {
 	constructor(private readonly usersService: UserService) {}
 
 	// Obtener todos los usuarios (GET /users)
+	//@UseGuards(DynamicQueryValidationGuard)
+	//@Entity(User)
 	@Get()
-	@UseGuards(DynamicQueryValidationGuard)
-	@Entity(User)
-	async findAllFilterRelation(@Query('filter') filter: string, @Query('relations') relations: string): Promise<any> {
-		const filterParams = filter ? JSON.parse(filter) : {};
-		const relationArray = relations ? relations.split(',') : [];
-		return this.usersService.findAllfilter(filterParams, relationArray);
+	async getAllUsers(
+		@Query('filter') filter: any, // Recibimos el filtro de la consulta
+		@Query('page') page = 1,
+		@Query('limit') limit = 10,
+	) {
+		// Convertimos el filtro en el formato esperado por el servicio
+		const filterParams = this.formatFilterParams(filter);
+
+		// Configuramos los parámetros de paginación
+		const paginationParams = {page: Number(page), limit: Number(limit)};
+
+		// Definimos las opciones de consulta
+		const queryOptions = {
+			relations: ['role',], // Ajusta según tus relaciones
+			select: ['id', 'name', 'last_name', 'email'] as (keyof User)[], // Ajusta según tus campos
+			//order: {created_at: 'DESC'} as {[key: string]: 'ASC' | 'DESC'}, // Ajusta según tus campos
+		};
+
+		// Llamamos al servicio genérico
+		return this.usersService.getAllFiltered(filterParams, paginationParams, queryOptions);
+	}
+
+	private formatFilterParams(filter: any): any {
+		const formattedFilters: any = {};
+
+		for (const key in filter) {
+			const operator = filter[key]['operator'];
+			const value = filter[key]['value'];
+
+			// Aquí se puede añadir lógica para manejar diferentes tipos de datos
+			formattedFilters[key] = {
+				operator,
+				value: Array.isArray(value) ? value : [value], // Aseguramos que el valor sea un array
+			};
+		}
+
+		return formattedFilters;
 	}
 
 	// Obtener un usuario por su ID (GET /users/:id)

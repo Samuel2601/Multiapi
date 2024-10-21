@@ -31,6 +31,7 @@ export class User {
 	@Column({type: 'boolean', default: true})
 	status: boolean;
 
+	// User.entity.ts
 	@ManyToOne(() => Role, (role) => role.users, {nullable: false, eager: true})
 	role: Role;
 

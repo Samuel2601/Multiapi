@@ -16,6 +16,7 @@ export class Role {
 	@Column({default: false})
 	is_default: boolean;
 
+	// Role.entity.ts
 	@OneToMany(() => User, (user) => user.role)
 	users: User[];
 
